@@ -3,11 +3,14 @@
 // header — the route recomputes deterministic public data.
 
 import { createFileRoute } from "@tanstack/react-router";
+import { requireCronSecret } from "@/lib/cron-auth.server";
 
 export const Route = createFileRoute("/api/public/hooks/systemic-risk-tick")({
   server: {
     handlers: {
-      POST: async () => {
+      POST: async ({ request }) => {
+        const unauth = requireCronSecret(request);
+        if (unauth) return unauth;
         try {
           const { computeSnapshot } = await import("@/lib/systemic-risk/engine.server");
           const { supabaseAdmin } = await import("@/integrations/supabase/client.server");

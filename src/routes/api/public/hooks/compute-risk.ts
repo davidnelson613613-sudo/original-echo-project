@@ -2,19 +2,14 @@
 // Runs FRED incremental (last 90 days) then recomputes today's snapshot.
 
 import { createFileRoute } from "@tanstack/react-router";
+import { requireCronSecret } from "@/lib/cron-auth.server";
 
 export const Route = createFileRoute("/api/public/hooks/compute-risk")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const apikey = request.headers.get("apikey") ?? "";
-        const expected = process.env.SUPABASE_PUBLISHABLE_KEY ?? "";
-        if (!expected || apikey !== expected) {
-          return new Response(JSON.stringify({ error: "unauthorized" }), {
-            status: 401,
-            headers: { "content-type": "application/json" },
-          });
-        }
+        const unauth = requireCronSecret(request);
+        if (unauth) return unauth;
         try {
           const { ingestAllFredStarter } = await import("@/lib/market-data/fred-ingest.server");
           const ingest = await ingestAllFredStarter({ sinceDays: 90 });
@@ -80,7 +75,7 @@ export const Route = createFileRoute("/api/public/hooks/compute-risk")({
         }
       },
       GET: async () =>
-        new Response(JSON.stringify({ ok: true, hint: "POST with apikey to run" }), {
+        new Response(JSON.stringify({ ok: true, hint: "POST with CRON_SECRET bearer to run" }), {
           status: 200,
           headers: { "content-type": "application/json" },
         }),
