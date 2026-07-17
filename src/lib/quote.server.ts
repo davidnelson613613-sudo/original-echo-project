@@ -2,14 +2,26 @@
 // bar fetch so a quote failure never kills a scan. Uses the same rotating
 // key pool. In-memory 15s TTL — every scan cycle gets fresh prices.
 
+export type MarketSession = "PRE" | "REGULAR" | "POST" | "CLOSED";
+
 export type Quote = {
   symbol: string;
-  price: number;         // last trade
+  price: number;         // last regular-session trade (or last known reg close after hours)
   open: number | null;   // session open
   previousClose: number | null;
-  change: number | null; // absolute
+  change: number | null; // absolute (regular-session change)
   changePct: number | null;
   ts: number;            // epoch ms
+  // Extended-hours (optional; populated when the provider reports them).
+  marketState?: MarketSession;
+  preMarketPrice?: number | null;
+  preMarketChange?: number | null;
+  preMarketChangePct?: number | null;
+  preMarketTs?: number | null;
+  postMarketPrice?: number | null;
+  postMarketChange?: number | null;
+  postMarketChangePct?: number | null;
+  postMarketTs?: number | null;
 };
 
 type CacheEntry = { at: number; quote: Quote };
