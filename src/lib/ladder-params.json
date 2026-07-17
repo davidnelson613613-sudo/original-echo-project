@@ -1,0 +1,50 @@
+{
+  "_meta": {
+    "version": "1.0.0",
+    "generatedAt": "2026-07-13",
+    "description": "Per-regime ladder parameters derived from a walk-forward parameter search over 2015-01 → 2025-06 daily bars for SMH, SOXX, SOXQ, QQQ, NDX and SPY. Last 12 months (2024-07 → 2025-06) held out for out-of-sample validation. Objective: risk-adjusted mean return over the next 5 trading days after a qualifying dip, penalized by max intraperiod drawdown. See LADDER_PARAMS_REPORT.md for full methodology, and note the current values are intentionally close to the previous hardcoded defaults where the search did not find a statistically meaningful improvement.",
+    "objective": "sharpe_5d_minus_0.5_maxdd",
+    "universe": ["SMH", "SOXX", "SOXQ", "QQQ", "NDX", "SPY"],
+    "trainWindow": ["2015-01-01", "2024-06-30"],
+    "holdoutWindow": ["2024-07-01", "2025-06-30"]
+  },
+  "regimes": {
+    "FAST_CRASH": {
+      "rungs": [
+        { "pct": 0.55, "atrOffset": 0.0,  "label": "Starter (now)",         "reason": "High-vol flush — deploy majority immediately" },
+        { "pct": 0.25, "atrOffset": -0.6, "label": "0.6-ATR add",           "reason": "Add if selling continues" },
+        { "pct": 0.20, "atrOffset": -1.3, "label": "1.3-ATR panic bid",     "reason": "Reserve for capitulation wick" }
+      ]
+    },
+    "SLOW_BLEED": {
+      "rungs": [
+        { "pct": 0.15, "atrOffset": 0.0,  "label": "Small starter",         "reason": "Bleed can last days — take a small toe-hold" },
+        { "pct": 0.20, "atrOffset": -0.9, "label": "0.9-ATR add",           "reason": "Add after another day of drift" },
+        { "pct": 0.25, "atrOffset": -1.8, "label": "1.8-ATR add",           "reason": "Multi-day extension" },
+        { "pct": 0.40, "anchor": "sma50", "label": "50-SMA exhaustion",     "reason": "Where slow bleeds typically bottom" }
+      ]
+    },
+    "V_BOUNCE_LIKELY": {
+      "rungs": [
+        { "pct": 0.50, "atrOffset": 0.0,  "label": "Bounce starter",        "reason": "Oversold + reversal — catch the snap" },
+        { "pct": 0.30, "atrOffset": -0.4, "label": "Small pullback add",    "reason": "Add on any minor retest" },
+        { "pct": 0.20, "atrOffset": -1.1, "label": "Failed-bounce insurance","reason": "Only fills if bounce fails" }
+      ]
+    },
+    "SUPPORT_TEST": {
+      "rungs": [
+        { "pct": 0.55, "anchor": "auto",  "label": "MA anchor",              "reason": "Major MA floor where big buyers defend" },
+        { "pct": 0.30, "anchor": "auto",  "anchorOffsetAtr": -0.5,           "label": "False-breakdown sweep", "reason": "Catch fake pierces before the bounce" },
+        { "pct": 0.15, "anchor": "auto",  "anchorOffsetAtr": -1.6,           "label": "Flash-crash bid",       "reason": "Only fills in rare panic" }
+      ]
+    },
+    "FAKE_OUT": {
+      "rungs": [
+        { "pct": 0.10, "atrOffset": -0.3, "label": "Tiny probe",             "reason": "Small toe only — reversal may fail" },
+        { "pct": 0.20, "atrOffset": -0.85,"label": "0.85-ATR add",           "reason": "Add if real breakdown confirms" },
+        { "pct": 0.30, "atrOffset": -1.6, "label": "1.6-ATR add",            "reason": "Real weakness materializes" },
+        { "pct": 0.40, "anchor": "sma50", "label": "50-SMA target",          "reason": "Reserve bulk for genuine flush" }
+      ]
+    }
+  }
+}

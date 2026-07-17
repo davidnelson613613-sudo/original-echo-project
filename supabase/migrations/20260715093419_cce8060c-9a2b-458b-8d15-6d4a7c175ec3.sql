@@ -1,0 +1,2 @@
+ALTER TABLE public.future_leaders_rankings ADD COLUMN IF NOT EXISTS deep_report jsonb;
+CREATE INDEX IF NOT EXISTS idx_future_leaders_rankings_snap_symbol ON public.future_leaders_rankings(snapshot_id, symbol);

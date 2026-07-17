@@ -1,0 +1,569 @@
+/* ══════════════════════════════════════════════════════════════════════
+   Crystal — optical-glass design language.
+
+   Every surface behaves like a physically-thick piece of polished
+   crystal suspended above the content. Refraction is real (SVG
+   feDisplacementMap via `backdrop-filter: url(#cr-refract-*)`), edges
+   are constructed from multiple lighting layers, and specular sweeps
+   respond to hover and press. Scoped to `.crystal-root` — classic UI
+   is entirely untouched.
+   ══════════════════════════════════════════════════════════════════════ */
+
+.crystal-root {
+  /* Palette — abyssal navy → aqua → seafoam → mist */
+  --cr-abyss-1: #02121e;
+  --cr-abyss-2: #06263c;
+  --cr-abyss-3: #0a3a54;
+  --cr-tide:    #0e5271;
+  --cr-aqua:    #67e8f9;
+  --cr-turq:    #5eead4;
+  --cr-seafoam: #a7f3d0;
+  --cr-mist:    #e8f6ff;
+  --cr-silver:  #cfd9e2;
+  --cr-coral:   #fb7185;
+  --cr-amber:   #fbbf24;
+
+  /* Ink */
+  --cr-ink:        rgba(236, 248, 255, 0.98);
+  --cr-ink-soft:   rgba(214, 234, 246, 0.80);
+  --cr-ink-faint:  rgba(196, 218, 234, 0.55);
+
+  /* Surface base fills — kept very low so refraction carries the tint */
+  --cr-slab-bg:   rgba(236, 248, 255, 0.045);
+  --cr-slab-hi:   rgba(236, 248, 255, 0.09);
+  --cr-pane-bg:   rgba(236, 248, 255, 0.065);
+  --cr-pill-bg:   rgba(236, 248, 255, 0.10);
+  --cr-line:      rgba(255, 255, 255, 0.14);
+  --cr-line-hi:   rgba(190, 240, 255, 0.55);
+
+  /* Curves — continuous, super-ellipse-like radii */
+  --cr-r-slab: 30px;
+  --cr-r-pane: 22px;
+  --cr-r-pill: 999px;
+
+  /* Motion */
+  --cr-spring: cubic-bezier(0.22, 1, 0.36, 1);
+  --cr-glide:  cubic-bezier(0.16, 1, 0.3, 1);
+  --cr-elastic: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --cr-quick:  180ms;
+  --cr-slow:   520ms;
+
+  /* Composed edge lighting — top-left illuminated rim, bottom-right
+     shadow trough, thin polished outer rim, and internal reflection. */
+  --cr-edge:
+    inset 0 1px 0 rgba(255, 255, 255, 0.42),      /* top illuminated rim */
+    inset 1px 0 0 rgba(255, 255, 255, 0.18),      /* left rim */
+    inset 0 -1px 0 rgba(0, 0, 0, 0.34),           /* bottom trough */
+    inset -1px 0 0 rgba(0, 0, 0, 0.20),           /* right trough */
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06);    /* faint inner ring */
+  --cr-edge-crisp:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.40),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+
+  /* Depth shadows — layered contact + ambient */
+  --cr-shadow-contact: 0 1px 2px rgba(2, 12, 22, 0.35);
+  --cr-shadow-soft:    0 18px 40px -18px rgba(4, 22, 40, 0.55);
+  --cr-shadow-lift:    0 42px 90px -30px rgba(6, 40, 70, 0.72);
+
+  color: var(--cr-ink);
+  color-scheme: dark;
+  min-height: 100vh;
+  font-feature-settings: "cv11" 1, "ss01" 1;
+  background:
+    radial-gradient(1200px 900px at 8% -8%,  rgba(103, 232, 249, 0.28), transparent 62%),
+    radial-gradient(1000px 800px at 108% 6%, rgba(94, 234, 212, 0.20), transparent 62%),
+    radial-gradient(900px 900px at 50% 118%, rgba(30, 110, 180, 0.28), transparent 62%),
+    linear-gradient(180deg, var(--cr-abyss-1) 0%, var(--cr-abyss-2) 50%, var(--cr-abyss-1) 100%);
+  background-attachment: fixed;
+}
+
+/* ═════════════════════════ Abyss backdrop ═════════════════════════ */
+
+.cr-abyss {
+  position: fixed;
+  inset: -12%;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.cr-caustic {
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(52px);
+  opacity: 0.55;
+  will-change: transform;
+}
+.cr-caustic.a {
+  width: 55vmax; height: 55vmax;
+  left: -12vmax; top: -8vmax;
+  background: radial-gradient(circle, rgba(103, 232, 249, 0.38), transparent 65%);
+  animation: crDrift1 42s ease-in-out infinite;
+}
+.cr-caustic.b {
+  width: 60vmax; height: 60vmax;
+  right: -18vmax; top: 24vmax;
+  background: radial-gradient(circle, rgba(94, 234, 212, 0.32), transparent 65%);
+  animation: crDrift2 55s ease-in-out infinite;
+}
+.cr-caustic.c {
+  width: 50vmax; height: 50vmax;
+  left: 22vmax; bottom: -18vmax;
+  background: radial-gradient(circle, rgba(46, 129, 220, 0.34), transparent 65%);
+  animation: crDrift3 48s ease-in-out infinite;
+}
+.cr-noise {
+  position: absolute; inset: 0;
+  background-image:
+    radial-gradient(rgba(255,255,255,0.035) 1px, transparent 1px),
+    radial-gradient(rgba(255,255,255,0.02)  1px, transparent 1px);
+  background-size: 3px 3px, 5px 5px;
+  background-position: 0 0, 1px 1px;
+  mix-blend-mode: screen;
+  opacity: 0.6;
+}
+
+@keyframes crDrift1 {
+  0%,100% { transform: translate3d(0, 0, 0) scale(1); }
+  50%     { transform: translate3d(4vmax, 3vmax, 0) scale(1.08); }
+}
+@keyframes crDrift2 {
+  0%,100% { transform: translate3d(0, 0, 0) scale(1); }
+  50%     { transform: translate3d(-5vmax, -2vmax, 0) scale(1.1); }
+}
+@keyframes crDrift3 {
+  0%,100% { transform: translate3d(0, 0, 0) scale(1); }
+  50%     { transform: translate3d(-3vmax, -4vmax, 0) scale(1.06); }
+}
+
+/* ═════════════════════════ Optical glass mixin ═════════════════════════
+   The real trick: `backdrop-filter` composes url(#cr-refract-*) with
+   blur+saturate+contrast+brightness. The SVG filter warps the sampled
+   backdrop, blur softens it optically, saturate + contrast preserve
+   color identity through the material, and brightness lifts the dark
+   ocean behind the glass just enough to read the illusion of a
+   transparent solid rather than a dark wash.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* ═════════════════════════ Slab (primary surface) ═════════════════════════ */
+
+.cr-slab {
+  position: relative;
+  background-color: var(--cr-slab-bg);
+  /* Adaptive tint layer — bright content reads darker, dark content
+     reads lighter. `background-blend-mode: overlay` on this soft
+     gradient is what creates the perceived opacity swing.            */
+  background-image:
+    linear-gradient(155deg,
+      rgba(255,255,255,0.14) 0%,
+      rgba(255,255,255,0.05) 34%,
+      rgba(255,255,255,0.02) 62%,
+      rgba(255,255,255,0.08) 100%);
+  background-blend-mode: overlay;
+  backdrop-filter: url(#cr-refract-lg) blur(14px) saturate(180%) contrast(108%) brightness(112%);
+  -webkit-backdrop-filter: blur(18px) saturate(180%) contrast(108%) brightness(112%);
+  border: 1px solid var(--cr-line);
+  border-radius: var(--cr-r-slab);
+  box-shadow:
+    var(--cr-edge),
+    var(--cr-shadow-contact),
+    var(--cr-shadow-soft);
+  overflow: hidden;
+  isolation: isolate;
+  transform: translateZ(0);
+}
+
+/* Specular streak — an elongated bloom that sweeps across the surface
+   on hover to reinforce the illusion of light gliding over solid mass. */
+.cr-slab::before {
+  content: "";
+  position: absolute;
+  inset: -60% -20% auto -20%;
+  height: 260%;
+  pointer-events: none;
+  background:
+    linear-gradient(
+      118deg,
+      transparent 40%,
+      rgba(255, 255, 255, 0.10) 49%,
+      rgba(255, 255, 255, 0.22) 50%,
+      rgba(255, 255, 255, 0.08) 52%,
+      transparent 62%
+    );
+  transform: translateX(-12%) rotate(0.001deg);
+  transition: transform 1100ms var(--cr-glide);
+  z-index: 0;
+  mix-blend-mode: screen;
+}
+
+/* Inner reflection — a soft light echo along the top edge, and a
+   fainter one along the bottom, simulating light traveling within
+   the thickness of the material. */
+.cr-slab::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    linear-gradient(180deg,
+      rgba(255,255,255,0.18) 0%,
+      rgba(255,255,255,0) 22%,
+      rgba(255,255,255,0) 78%,
+      rgba(255,255,255,0.06) 100%),
+    radial-gradient(120% 40% at 50% 0%, rgba(255,255,255,0.14), transparent 60%);
+  mix-blend-mode: screen;
+  z-index: 0;
+  opacity: 0.9;
+}
+
+.cr-slab > * { position: relative; z-index: 1; }
+.cr-slab.cr-hoverable {
+  transition: transform 460ms var(--cr-spring),
+              box-shadow 460ms var(--cr-glide),
+              border-color 260ms ease;
+}
+.cr-slab.cr-hoverable:hover::before { transform: translateX(16%); }
+.cr-slab.cr-hoverable:hover {
+  transform: translateY(-4px);
+  border-color: rgba(255,255,255,0.22);
+  box-shadow:
+    var(--cr-edge),
+    var(--cr-shadow-contact),
+    var(--cr-shadow-lift);
+}
+.cr-slab.cr-hoverable:active { transform: translateY(-1px) scale(0.997); }
+
+/* ═════════════════════════ Pane (secondary surface) ═════════════════════════ */
+
+.cr-pane {
+  position: relative;
+  background-color: var(--cr-pane-bg);
+  background-image:
+    linear-gradient(160deg,
+      rgba(255,255,255,0.16) 0%,
+      rgba(255,255,255,0.05) 40%,
+      rgba(255,255,255,0.02) 70%,
+      rgba(255,255,255,0.07) 100%);
+  background-blend-mode: overlay;
+  backdrop-filter: url(#cr-refract-md) blur(10px) saturate(175%) contrast(106%) brightness(110%);
+  -webkit-backdrop-filter: blur(14px) saturate(175%) contrast(106%) brightness(110%);
+  border: 1px solid var(--cr-line);
+  border-radius: var(--cr-r-pane);
+  box-shadow:
+    var(--cr-edge),
+    var(--cr-shadow-contact),
+    0 22px 50px -22px rgba(3, 22, 40, 0.55);
+  overflow: hidden;
+  isolation: isolate;
+}
+.cr-pane::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    linear-gradient(180deg,
+      rgba(255,255,255,0.14) 0%,
+      rgba(255,255,255,0) 20%,
+      rgba(255,255,255,0) 82%,
+      rgba(255,255,255,0.05) 100%);
+  mix-blend-mode: screen;
+  z-index: 0;
+}
+.cr-pane > * { position: relative; z-index: 1; }
+
+/* ═════════════════════════ Pill (capsule button) ═════════════════════════ */
+
+.cr-pill {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.55rem 1rem;
+  border-radius: var(--cr-r-pill);
+  border: 1px solid var(--cr-line);
+  background-color: var(--cr-pill-bg);
+  background-image: linear-gradient(180deg, rgba(255,255,255,0.18), rgba(255,255,255,0.04));
+  color: var(--cr-ink);
+  backdrop-filter: url(#cr-refract-sm) blur(8px) saturate(180%) contrast(108%) brightness(114%);
+  -webkit-backdrop-filter: blur(10px) saturate(180%) contrast(108%) brightness(114%);
+  box-shadow:
+    var(--cr-edge-crisp),
+    var(--cr-shadow-contact),
+    0 14px 28px -14px rgba(3, 22, 40, 0.6);
+  font-size: 0.82rem;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  overflow: hidden;
+  isolation: isolate;
+  transition:
+    transform 300ms var(--cr-elastic),
+    border-color 220ms ease,
+    background-color 220ms ease,
+    box-shadow 300ms var(--cr-glide);
+}
+.cr-pill::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    radial-gradient(120% 60% at 50% -20%, rgba(255,255,255,0.28), transparent 62%),
+    linear-gradient(180deg, rgba(255,255,255,0) 60%, rgba(0,0,0,0.10) 100%);
+  mix-blend-mode: screen;
+  z-index: 0;
+}
+.cr-pill > * { position: relative; z-index: 1; }
+.cr-pill:hover  { transform: translateY(-2px) scale(1.02); border-color: var(--cr-line-hi); }
+.cr-pill:active { transform: translateY(0) scale(0.955); }
+.cr-pill[data-active="true"] {
+  background-image:
+    linear-gradient(180deg, rgba(255,255,255,0.28), rgba(255,255,255,0.06)),
+    linear-gradient(180deg, rgba(103,232,249,0.45), rgba(56,189,248,0.22));
+  border-color: var(--cr-line-hi);
+  color: var(--cr-mist);
+  box-shadow:
+    var(--cr-edge-crisp),
+    0 0 0 1px rgba(103,232,249,0.35),
+    0 18px 40px -14px rgba(103,232,249,0.42);
+}
+.cr-pill:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+
+.cr-pill-ghost {
+  background-color: transparent;
+  background-image: none;
+  border-color: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  color: var(--cr-ink-soft);
+}
+.cr-pill-ghost::before { display: none; }
+.cr-pill-ghost:hover { color: var(--cr-ink); background-color: rgba(255,255,255,0.05); }
+
+/* ═════════════════════════ Orb (circular control) ═════════════════════════ */
+
+.cr-orb {
+  --sz: 3rem;
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  height: var(--sz);
+  width: var(--sz);
+  border-radius: 999px;
+  border: 1px solid var(--cr-line);
+  background-color: var(--cr-pill-bg);
+  background-image:
+    radial-gradient(120% 90% at 30% 20%, rgba(255,255,255,0.32), rgba(255,255,255,0.04) 55%, transparent 100%);
+  color: var(--cr-ink);
+  backdrop-filter: url(#cr-refract-sm) blur(8px) saturate(180%) contrast(110%) brightness(116%);
+  -webkit-backdrop-filter: blur(10px) saturate(180%) contrast(110%) brightness(116%);
+  box-shadow:
+    var(--cr-edge-crisp),
+    var(--cr-shadow-contact),
+    0 14px 28px -14px rgba(3, 22, 40, 0.65);
+  cursor: pointer;
+  overflow: hidden;
+  isolation: isolate;
+  transition:
+    transform 320ms var(--cr-elastic),
+    border-color 220ms ease,
+    box-shadow 320ms var(--cr-glide);
+}
+.cr-orb::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    radial-gradient(60% 40% at 30% 18%, rgba(255,255,255,0.55), transparent 70%),
+    radial-gradient(80% 40% at 70% 92%, rgba(0,0,0,0.28), transparent 70%);
+  mix-blend-mode: screen;
+  z-index: 0;
+}
+.cr-orb > * { position: relative; z-index: 1; }
+.cr-orb:hover  { transform: translateY(-3px) scale(1.06); border-color: var(--cr-line-hi); }
+.cr-orb:active { transform: translateY(0) scale(0.92); }
+.cr-orb[data-active="true"] {
+  background-image:
+    radial-gradient(60% 45% at 30% 20%, rgba(255,255,255,0.55), transparent 70%),
+    radial-gradient(circle at 50% 50%, rgba(103,232,249,0.35), rgba(56,189,248,0.14) 55%, transparent 100%);
+  border-color: var(--cr-line-hi);
+  color: var(--cr-mist);
+  box-shadow:
+    var(--cr-edge-crisp),
+    0 0 0 1px rgba(103,232,249,0.5),
+    0 0 34px rgba(103,232,249,0.5),
+    inset 0 0 24px rgba(103,232,249,0.28);
+}
+.cr-orb:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+
+/* ═════════════════════════ Segmented arc ═════════════════════════ */
+
+.cr-segmented {
+  position: relative;
+  display: inline-flex;
+  padding: 5px;
+  border-radius: 999px;
+  border: 1px solid var(--cr-line);
+  background-color: var(--cr-pill-bg);
+  background-image: linear-gradient(180deg, rgba(255,255,255,0.14), rgba(255,255,255,0.03));
+  backdrop-filter: url(#cr-refract-sm) blur(10px) saturate(170%) contrast(106%) brightness(112%);
+  -webkit-backdrop-filter: blur(12px) saturate(170%) contrast(106%) brightness(112%);
+  box-shadow: var(--cr-edge-crisp), 0 14px 30px -14px rgba(3,22,40,0.55);
+  gap: 3px;
+  isolation: isolate;
+}
+.cr-segmented > button {
+  border: 0;
+  background: transparent;
+  color: var(--cr-ink-soft);
+  padding: 0.5rem 1.1rem;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  cursor: pointer;
+  transition:
+    color var(--cr-quick) ease,
+    background-color var(--cr-quick) ease,
+    transform var(--cr-quick) var(--cr-elastic);
+}
+.cr-segmented > button:hover { color: var(--cr-ink); }
+.cr-segmented > button[data-active="true"] {
+  background-image:
+    linear-gradient(180deg, rgba(255,255,255,0.20), rgba(255,255,255,0.04)),
+    linear-gradient(180deg, rgba(103,232,249,0.36), rgba(56,189,248,0.18));
+  color: var(--cr-mist);
+  box-shadow: var(--cr-edge-crisp);
+}
+
+/* ═════════════════════════ Typography ═════════════════════════ */
+
+.cr-micro {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--cr-ink-faint);
+}
+.cr-num {
+  font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+  font-feature-settings: "tnum" 1, "cv11" 1;
+  letter-spacing: -0.02em;
+}
+.cr-serif {
+  font-family: "Instrument Serif", "Iowan Old Style", "Palatino", ui-serif, serif;
+  font-feature-settings: "tnum" 1, "ss01" 1;
+  letter-spacing: -0.02em;
+  font-weight: 400;
+}
+.cr-display {
+  font-family: "Instrument Serif", ui-serif, serif;
+  font-weight: 400;
+  letter-spacing: -0.035em;
+  line-height: 0.9;
+}
+
+/* ═════════════════════════ Motion presets ═════════════════════════ */
+
+@keyframes crRise {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.cr-rise { animation: crRise 520ms var(--cr-spring) both; }
+
+@keyframes crFloat {
+  0%,100% { transform: translateY(0); }
+  50%     { transform: translateY(-5px); }
+}
+.cr-float { animation: crFloat 6s ease-in-out infinite; }
+
+@keyframes crPulseHalo {
+  0%,100% { box-shadow: 0 0 0 0 rgba(103,232,249,0.35), 0 0 60px rgba(103,232,249,0.22); }
+  50%     { box-shadow: 0 0 0 12px rgba(103,232,249,0.0),  0 0 90px rgba(103,232,249,0.32); }
+}
+.cr-halo { animation: crPulseHalo 4s ease-in-out infinite; }
+
+@keyframes crRayGrow {
+  from { transform: scaleY(0); }
+  to   { transform: scaleY(1); }
+}
+
+/* Continuous specular sweep for hero surfaces */
+@keyframes crShine {
+  0%   { transform: translateX(-30%); }
+  100% { transform: translateX(30%); }
+}
+
+/* ═════════════════════════ Scrollbar ═════════════════════════ */
+
+.crystal-root ::-webkit-scrollbar { width: 8px; height: 8px; }
+.crystal-root ::-webkit-scrollbar-track { background: transparent; }
+.crystal-root ::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(103,232,249,0.35), rgba(59,130,246,0.35));
+  border-radius: 999px;
+}
+
+/* ═════════════════════════ Responsive ═════════════════════════
+   Mobile lowers the refraction + blur budget to stay smooth. */
+
+@media (max-width: 768px) {
+  .crystal-root {
+    --cr-r-slab: 26px;
+    --cr-r-pane: 20px;
+  }
+  .cr-slab {
+    backdrop-filter: url(#cr-refract-md) blur(10px) saturate(170%) contrast(106%) brightness(110%);
+    -webkit-backdrop-filter: blur(14px) saturate(170%) contrast(106%) brightness(110%);
+  }
+  .cr-pane {
+    backdrop-filter: url(#cr-refract-sm) blur(8px) saturate(165%) contrast(105%) brightness(108%);
+    -webkit-backdrop-filter: blur(10px) saturate(165%) contrast(105%) brightness(108%);
+  }
+  .cr-pill, .cr-orb, .cr-segmented {
+    backdrop-filter: blur(8px) saturate(170%) contrast(106%) brightness(112%);
+    -webkit-backdrop-filter: blur(8px) saturate(170%) contrast(106%) brightness(112%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cr-caustic, .cr-float, .cr-halo, .cr-rise { animation: none !important; }
+  .cr-pill, .cr-orb, .cr-slab.cr-hoverable, .cr-segmented > button { transition: none !important; }
+  .cr-slab::before { transition: none !important; transform: none !important; }
+}
+
+/* Fallbacks for browsers without backdrop-filter (older Firefox) */
+@supports not (backdrop-filter: blur(1px)) {
+  .cr-slab, .cr-pane, .cr-pill, .cr-orb, .cr-segmented {
+    background-color: rgba(8, 30, 46, 0.9);
+  }
+}
+
+/* Fallback if SVG-referenced backdrop-filter is unsupported: the
+   `url()` reference silently invalidates the whole shorthand, so we
+   provide a plain blur/saturate stack via @supports negation. */
+@supports not (backdrop-filter: url(#x)) {
+  .cr-slab       { backdrop-filter: blur(18px) saturate(180%) contrast(108%) brightness(112%); }
+  .cr-pane       { backdrop-filter: blur(14px) saturate(175%) contrast(106%) brightness(110%); }
+  .cr-pill       { backdrop-filter: blur(10px) saturate(180%) contrast(108%) brightness(114%); }
+  .cr-orb        { backdrop-filter: blur(10px) saturate(180%) contrast(110%) brightness(116%); }
+  .cr-segmented  { backdrop-filter: blur(12px) saturate(170%) contrast(106%) brightness(112%); }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .cr-slab, .cr-pane, .cr-pill, .cr-orb, .cr-segmented {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background-color: rgba(6, 26, 44, 0.94) !important;
+  }
+  .cr-slab::before, .cr-slab::after, .cr-pane::after, .cr-pill::before, .cr-orb::before {
+    display: none !important;
+  }
+}
