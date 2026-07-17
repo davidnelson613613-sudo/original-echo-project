@@ -70,7 +70,7 @@ async function fetchOne(symbol: string): Promise<Quote | null> {
     );
     url.searchParams.set("range", "1d");
     url.searchParams.set("interval", "1m");
-    url.searchParams.set("includePrePost", "false");
+    url.searchParams.set("includePrePost", "true");
 
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), 3_500);
