@@ -115,6 +115,16 @@ async function fetchOne(symbol: string): Promise<Quote | null> {
       const ts = typeof meta.regularMarketTime === "number" ? meta.regularMarketTime * 1000 : Date.now();
       recordYahooResult(true);
       recordProvider("yahoo", true, Date.now() - started);
+      const rawState = typeof meta.marketState === "string" ? meta.marketState.toUpperCase() : "";
+      const marketState: import("./quote.server").MarketSession =
+        rawState === "PRE" || rawState === "PREPRE"
+          ? "PRE"
+          : rawState === "POST" || rawState === "POSTPOST"
+          ? "POST"
+          : rawState === "REGULAR"
+          ? "REGULAR"
+          : "CLOSED";
+      const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
       return {
         symbol,
         price,
@@ -123,6 +133,15 @@ async function fetchOne(symbol: string): Promise<Quote | null> {
         change,
         changePct: pct,
         ts,
+        marketState,
+        preMarketPrice: num(meta.preMarketPrice),
+        preMarketChange: num(meta.preMarketChange),
+        preMarketChangePct: num(meta.preMarketChangePercent),
+        preMarketTs: typeof meta.preMarketTime === "number" ? meta.preMarketTime * 1000 : null,
+        postMarketPrice: num(meta.postMarketPrice),
+        postMarketChange: num(meta.postMarketChange),
+        postMarketChangePct: num(meta.postMarketChangePercent),
+        postMarketTs: typeof meta.postMarketTime === "number" ? meta.postMarketTime * 1000 : null,
       };
     } catch (e) {
       lastErr = e;
