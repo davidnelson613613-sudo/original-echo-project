@@ -214,6 +214,61 @@ export function AiBubble({ variant = "bubble" }: { variant?: "bubble" | "page" }
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const snapshot = useAppSnapshot();
 
+  // Draggable bubble position (persisted). Offsets are added to the default
+  // bottom-right anchor: negative values pull the bubble up / to the left.
+  // The same offset is applied to the open panel so it stays tethered.
+  const [pos, setPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const dragState = useRef<{ startX: number; startY: number; baseX: number; baseY: number; moved: boolean } | null>(null);
+  const [dragging, setDragging] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem("qs_ai_bubble_pos");
+      if (raw) {
+        const p = JSON.parse(raw) as { x?: number; y?: number };
+        if (typeof p.x === "number" && typeof p.y === "number") setPos({ x: p.x, y: p.y });
+      }
+    } catch { /* ignore */ }
+  }, []);
+  const savePos = useCallback((p: { x: number; y: number }) => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem("qs_ai_bubble_pos", JSON.stringify(p));
+  }, []);
+  const onDragPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (isPage) return;
+    (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
+    dragState.current = { startX: e.clientX, startY: e.clientY, baseX: pos.x, baseY: pos.y, moved: false };
+  }, [isPage, pos.x, pos.y]);
+  const onDragPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const s = dragState.current;
+    if (!s) return;
+    const dx = e.clientX - s.startX;
+    const dy = e.clientY - s.startY;
+    if (!s.moved && Math.hypot(dx, dy) < 6) return;
+    s.moved = true;
+    if (!dragging) setDragging(true);
+    // Bubble is bottom-right anchored: dragging right/down should shrink the
+    // offset. Clamp to viewport so the bubble can't be lost off-screen.
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const nextX = Math.min(0, Math.max(-(vw - 96), s.baseX + dx));
+    const nextY = Math.min(0, Math.max(-(vh - 96), s.baseY + dy));
+    setPos({ x: nextX, y: nextY });
+  }, [dragging]);
+  const onDragPointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const s = dragState.current;
+    dragState.current = null;
+    (e.currentTarget as Element).releasePointerCapture?.(e.pointerId);
+    if (s?.moved) {
+      savePos(pos);
+      // Prevent the click that follows this pointerup from toggling the panel.
+      setTimeout(() => setDragging(false), 0);
+    } else {
+      setDragging(false);
+    }
+  }, [pos, savePos]);
+
+
   useEffect(() => {
     setModelId(loadModel());
     if (typeof window !== "undefined") {
