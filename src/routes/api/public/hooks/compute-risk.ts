@@ -75,7 +75,7 @@ export const Route = createFileRoute("/api/public/hooks/compute-risk")({
         }
       },
       GET: async () =>
-        new Response(JSON.stringify({ ok: true, hint: "POST with apikey to run" }), {
+        new Response(JSON.stringify({ ok: true, hint: "POST with CRON_SECRET bearer to run" }), {
           status: 200,
           headers: { "content-type": "application/json" },
         }),
