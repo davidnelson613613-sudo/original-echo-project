@@ -1523,21 +1523,69 @@ function FocusedQuotePill({ symbol, refPrice }: { symbol: string; refPrice: numb
   const delta = ((quote.price - refPrice) / refPrice) * 100;
   const ageMs = Date.now() - quote.ts;
   const ageSec = Math.max(0, Math.round(ageMs / 1000));
+
+  // Extended-hours: prefer Pre-Market when marketState === "PRE" and pre data
+  // exists; otherwise show After Hours when we have post data. Both come from
+  // the same Yahoo /chart meta as the regular price, so they stay in sync.
+  const isPre = quote.marketState === "PRE" && typeof quote.preMarketPrice === "number";
+  const isPost =
+    !isPre &&
+    (quote.marketState === "POST" || quote.marketState === "CLOSED") &&
+    typeof quote.postMarketPrice === "number";
+  const extLabel = isPre ? "Pre-Market" : "After Hours";
+  const extPrice = isPre ? quote.preMarketPrice! : isPost ? quote.postMarketPrice! : null;
+  const extChange = isPre ? quote.preMarketChange ?? null : isPost ? quote.postMarketChange ?? null : null;
+  const extPct = isPre ? quote.preMarketChangePct ?? null : isPost ? quote.postMarketChangePct ?? null : null;
+  // Only surface an ext-hours row when the market isn't in the regular session.
+  const showExt = quote.marketState && quote.marketState !== "REGULAR";
+  const extPositive = (extChange ?? extPct ?? 0) >= 0;
+
   return (
-    <span
-      className={`inline-flex items-center gap-1.5 text-[10px] font-mono px-2 py-0.5 rounded border ${
-        delta >= 0
-          ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
-          : "border-rose-500/40 bg-rose-500/10 text-rose-300"
-      }`}
-      title={`Live quote via TwelveData /quote — ${ageSec}s old`}
-    >
-      <span className="h-1.5 w-1.5 rounded-full bg-current animate-pulse" />
-      LIVE {usd(quote.price)}
-      <span className="opacity-70">
-        {delta >= 0 ? "+" : ""}
-        {delta.toFixed(2)}% vs scan
+    <span className="inline-flex flex-col items-start gap-0.5">
+      <span
+        className={`inline-flex items-center gap-1.5 text-[10px] font-mono px-2 py-0.5 rounded border ${
+          delta >= 0
+            ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+            : "border-rose-500/40 bg-rose-500/10 text-rose-300"
+        }`}
+        title={`Live quote via Yahoo /chart — ${ageSec}s old`}
+      >
+        <span className="h-1.5 w-1.5 rounded-full bg-current animate-pulse" />
+        LIVE {usd(quote.price)}
+        <span className="opacity-70">
+          {delta >= 0 ? "+" : ""}
+          {delta.toFixed(2)}% vs scan
+        </span>
       </span>
+      {showExt && extPrice != null ? (
+        <span
+          className={`inline-flex items-center gap-1.5 text-[10px] font-mono px-2 py-0.5 rounded border ${
+            extPositive
+              ? "border-emerald-500/25 bg-emerald-500/5 text-emerald-300/90"
+              : "border-rose-500/25 bg-rose-500/5 text-rose-300/90"
+          }`}
+          title={`${extLabel} price via Yahoo, updates as new trades print`}
+        >
+          <span className="opacity-70 uppercase tracking-wider text-[9px]">{extLabel}</span>
+          {usd(extPrice)}
+          {extChange != null && (
+            <span className="opacity-80">
+              {extChange >= 0 ? "+" : ""}
+              {extChange.toFixed(2)}
+            </span>
+          )}
+          {extPct != null && (
+            <span className="opacity-70">
+              ({extPct >= 0 ? "+" : ""}
+              {extPct.toFixed(2)}%)
+            </span>
+          )}
+        </span>
+      ) : showExt ? (
+        <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-slate-700 bg-slate-800/40 text-slate-400">
+          After Hours: Closed
+        </span>
+      ) : null}
     </span>
   );
 }

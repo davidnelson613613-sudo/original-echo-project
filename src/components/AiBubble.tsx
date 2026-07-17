@@ -214,6 +214,61 @@ export function AiBubble({ variant = "bubble" }: { variant?: "bubble" | "page" }
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const snapshot = useAppSnapshot();
 
+  // Draggable bubble position (persisted). Offsets are added to the default
+  // bottom-right anchor: negative values pull the bubble up / to the left.
+  // The same offset is applied to the open panel so it stays tethered.
+  const [pos, setPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const dragState = useRef<{ startX: number; startY: number; baseX: number; baseY: number; moved: boolean } | null>(null);
+  const [dragging, setDragging] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem("qs_ai_bubble_pos");
+      if (raw) {
+        const p = JSON.parse(raw) as { x?: number; y?: number };
+        if (typeof p.x === "number" && typeof p.y === "number") setPos({ x: p.x, y: p.y });
+      }
+    } catch { /* ignore */ }
+  }, []);
+  const savePos = useCallback((p: { x: number; y: number }) => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem("qs_ai_bubble_pos", JSON.stringify(p));
+  }, []);
+  const onDragPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (isPage) return;
+    (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
+    dragState.current = { startX: e.clientX, startY: e.clientY, baseX: pos.x, baseY: pos.y, moved: false };
+  }, [isPage, pos.x, pos.y]);
+  const onDragPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const s = dragState.current;
+    if (!s) return;
+    const dx = e.clientX - s.startX;
+    const dy = e.clientY - s.startY;
+    if (!s.moved && Math.hypot(dx, dy) < 6) return;
+    s.moved = true;
+    if (!dragging) setDragging(true);
+    // Bubble is bottom-right anchored: dragging right/down should shrink the
+    // offset. Clamp to viewport so the bubble can't be lost off-screen.
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const nextX = Math.min(0, Math.max(-(vw - 96), s.baseX + dx));
+    const nextY = Math.min(0, Math.max(-(vh - 96), s.baseY + dy));
+    setPos({ x: nextX, y: nextY });
+  }, [dragging]);
+  const onDragPointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const s = dragState.current;
+    dragState.current = null;
+    (e.currentTarget as Element).releasePointerCapture?.(e.pointerId);
+    if (s?.moved) {
+      savePos(pos);
+      // Prevent the click that follows this pointerup from toggling the panel.
+      setTimeout(() => setDragging(false), 0);
+    } else {
+      setDragging(false);
+    }
+  }, [pos, savePos]);
+
+
   useEffect(() => {
     setModelId(loadModel());
     if (typeof window !== "undefined") {
@@ -411,9 +466,14 @@ export function AiBubble({ variant = "bubble" }: { variant?: "bubble" | "page" }
 
       {!isPage && !hidden && (
       <div
+        onPointerDown={onDragPointerDown}
+        onPointerMove={onDragPointerMove}
+        onPointerUp={onDragPointerUp}
+        onPointerCancel={onDragPointerUp}
+        style={{ transform: `translate(${pos.x}px, ${pos.y}px)`, touchAction: "none" }}
         className={`fixed bottom-4 right-4 z-50 flex flex-col items-end gap-1.5 transition-opacity ${
           ghost && !open ? "opacity-20" : "opacity-100"
-        }`}
+        } ${dragging ? "cursor-grabbing" : "cursor-grab"}`}
       >
         <div className="flex items-center gap-1">
           <button
@@ -434,7 +494,14 @@ export function AiBubble({ variant = "bubble" }: { variant?: "bubble" | "page" }
           </button>
         </div>
       <button
-        onClick={() => setOpen((v) => !v)}
+        onClick={(e) => {
+          if (dragging) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+          }
+          setOpen((v) => !v);
+        }}
         aria-label={open ? "Close AI assistant" : "Open AI assistant"}
         className={`group relative flex h-[68px] w-[68px] items-center justify-center rounded-2xl transition hover:-translate-y-0.5 ${
           ghost && !open ? "pointer-events-none" : ""
@@ -458,6 +525,7 @@ export function AiBubble({ variant = "bubble" }: { variant?: "bubble" | "page" }
       </div>
       )}
 
+
       {open && (
         <div
           role="dialog"
@@ -471,6 +539,7 @@ export function AiBubble({ variant = "bubble" }: { variant?: "bubble" | "page" }
             isPage
               ? undefined
               : {
+                  transform: `translate(${pos.x}px, ${pos.y}px)`,
                   backgroundImage:
                     "linear-gradient(140deg, rgba(34,211,238,0.55), rgba(139,92,246,0.35) 45%, rgba(15,23,42,0.4) 75%)",
                 }
