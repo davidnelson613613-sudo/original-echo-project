@@ -539,6 +539,7 @@ export function AiBubble({ variant = "bubble" }: { variant?: "bubble" | "page" }
             isPage
               ? undefined
               : {
+                  transform: `translate(${pos.x}px, ${pos.y}px)`,
                   backgroundImage:
                     "linear-gradient(140deg, rgba(34,211,238,0.55), rgba(139,92,246,0.35) 45%, rgba(15,23,42,0.4) 75%)",
                 }
