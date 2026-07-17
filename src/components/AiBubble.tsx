@@ -466,9 +466,14 @@ export function AiBubble({ variant = "bubble" }: { variant?: "bubble" | "page" }
 
       {!isPage && !hidden && (
       <div
+        onPointerDown={onDragPointerDown}
+        onPointerMove={onDragPointerMove}
+        onPointerUp={onDragPointerUp}
+        onPointerCancel={onDragPointerUp}
+        style={{ transform: `translate(${pos.x}px, ${pos.y}px)`, touchAction: "none" }}
         className={`fixed bottom-4 right-4 z-50 flex flex-col items-end gap-1.5 transition-opacity ${
           ghost && !open ? "opacity-20" : "opacity-100"
-        }`}
+        } ${dragging ? "cursor-grabbing" : "cursor-grab"}`}
       >
         <div className="flex items-center gap-1">
           <button
@@ -489,7 +494,14 @@ export function AiBubble({ variant = "bubble" }: { variant?: "bubble" | "page" }
           </button>
         </div>
       <button
-        onClick={() => setOpen((v) => !v)}
+        onClick={(e) => {
+          if (dragging) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+          }
+          setOpen((v) => !v);
+        }}
         aria-label={open ? "Close AI assistant" : "Open AI assistant"}
         className={`group relative flex h-[68px] w-[68px] items-center justify-center rounded-2xl transition hover:-translate-y-0.5 ${
           ghost && !open ? "pointer-events-none" : ""
@@ -512,6 +524,7 @@ export function AiBubble({ variant = "bubble" }: { variant?: "bubble" | "page" }
       </button>
       </div>
       )}
+
 
       {open && (
         <div
