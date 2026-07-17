@@ -40,6 +40,15 @@ type Meta = {
   chartPreviousClose?: number;
   previousClose?: number;
   regularMarketTime?: number;
+  marketState?: string;
+  preMarketPrice?: number;
+  preMarketChange?: number;
+  preMarketChangePercent?: number;
+  preMarketTime?: number;
+  postMarketPrice?: number;
+  postMarketChange?: number;
+  postMarketChangePercent?: number;
+  postMarketTime?: number;
 };
 
 async function fetchOne(symbol: string): Promise<Quote | null> {
